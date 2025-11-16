@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Le-Wardrobe NFT Trait Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+
+<script type="module">
+        // ---------------------------------------------------------------------
+        // FIREBASE SETUP (For Canvas persistence - can be ignored for GitHub Pages demo without state saving)
+        // ---------------------------------------------------------------------
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment (will be undefined on GitHub Pages)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, auth, db;
+        
+        async function initializeAuth() {
+            try {
+                // Initialize Firebase only if the config is not empty (i.e., if provided by Canvas)
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+                    setLogLevel('error'); 
+
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log("Firebase initialized and user signed in (Canvas).");
+                } else {
+                    console.log("Firebase not initialized. Running as a standalone GitHub Pages demo.");
+                }
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+            }
+        }
+
+        initializeAuth();
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #ede9fe 100%); /* Light blue to light purple gradient */
+        }
+        .card {
+            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.1), 0 8px 15px -5px rgba(0, 0, 0, 0.08);
+            border-radius: 1.5rem; /* More rounded */
+        }
+        .category-button {
+            transition: all 0.2s ease-in-out;
+            border-radius: 0.75rem; /* Slightly rounded */
+        }
+        .category-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.1);
+        }
+        .selected-category {
+            background-color: #4f46e5; /* Indigo-600 */
+            color: white;
+            box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);
+            border-color: #4f46e5;
+        }
+        .trait-button {
+            transition: all 0.2s ease-in-out;
+            border-radius: 0.75rem; /* Slightly rounded */
+        }
+        .trait-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.1);
+        }
+        .selected-trait {
+            background-color: #10b981; /* Emerald-500 */
+            color: white;
+            box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4);
+            border-color: #10b981;
+        }
+        .trait-pill {
+            background-color: #6366f1; /* Indigo-500 */
+            color: white;
+            border-radius: 9999px; /* Full pill shape */
+            padding: 0.25rem 0.75rem;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .trait-pill-remove {
+            margin-left: 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .trait-pill-remove:hover {
+            color: white;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8 flex flex-col items-center">
+
+    <div class="w-full max-w-5xl">
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-extrabold mb-3">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-700">
+                    👑 Le-Wardrobe
+                </span>
+            </h1>
+            <p class="text-gray-700 text-lg">Unleash your creativity. Modify multiple traits on your LeGods NFT!</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-white p-8 rounded-3xl card mb-10 space-y-8">
+
+            <!-- Step 1: Image Upload -->
+            <div>
+                <label for="imageUpload" class="block text-xl font-semibold text-gray-800 mb-4">1. Upload Your LeGods NFT Image</label>
+                <input type="file" id="imageUpload" accept="image/png, image/jpeg, image/webp" class="block w-full text-base text-gray-900 border border-gray-300 rounded-xl cursor-pointer bg-gray-50 focus:outline-none file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-base file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 transition duration-150">
+                <p class="mt-3 text-sm text-red-600 font-medium">
+                    ⚠️ Policy: Only **LeGods NFT** images are permitted. No photos, nudity, or explicit content.
+                </p>
+            </div>
+
+            <!-- Step 2: Select Trait Categories -->
+            <div>
+                <label class="block text-xl font-semibold text-gray-800 mb-4">2. Select Trait Categories</label>
+                <div id="categoryButtons" class="flex flex-wrap gap-4">
+                    <!-- Category buttons will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Step 3: Select Specific Trait -->
+            <div id="traitSelectionContainer" class="hidden">
+                <label class="block text-xl font-semibold text-gray-800 mb-4" id="traitSelectionLabel">3. Choose Traits for [Category]</label>
+                <div id="traitButtons" class="flex flex-wrap gap-4 mb-4">
+                    <!-- Trait buttons will be inserted here -->
+                </div>
+                <!-- Selected Trait Pills -->
+                <div id="selectedTraitsPills" class="mt-4 flex flex-wrap gap-2">
+                    <span id="noTraitsSelected" class="text-gray-500 italic text-sm">No traits selected yet.</span>
+                </div>
+            </div>
+
+            <!-- Step 4: Generate Button -->
+            <button id="generateButton" onclick="startGeneration()" class="w-full flex items-center justify-center p-4 text-xl font-bold text-white bg-indigo-600 rounded-2xl hover:bg-indigo-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                <span id="buttonText">Select Image and at least one Trait</span>
+                <svg id="spinner" class="animate-spin -ml-1 mr-3 h-6 w-6 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+            <p id="statusMessage" class="text-center text-md text-gray-600 pt-3"></p>
+        </div>
+
+        <!-- Output Section -->
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Original Image Card -->
+            <div class="bg-white p-6 rounded-3xl card text-center">
+                <h2 class="text-2xl font-semibold mb-5 text-gray-800">Original LeGod</h2>
+                <div class="h-96 w-full bg-gray-100 flex items-center justify-center rounded-2xl relative overflow-hidden border border-gray-200">
+                    <img id="originalImage" class="max-h-full max-w-full object-contain rounded-2xl absolute inset-0 m-auto" src="" alt="Original Image" style="display: none;">
+                    <span id="originalPlaceholder" class="text-gray-400 text-lg">Upload your LeGods NFT image above</span>
+                </div>
+            </div>
+
+            <!-- Result Image Card -->
+            <div class="bg-white p-6 rounded-3xl card text-center">
+                <h2 class="text-2xl font-semibold mb-5 text-indigo-800">New Le-Wardrobe Creation</h2>
+                <div class="h-96 w-full bg-gray-100 flex items-center justify-center rounded-2xl relative overflow-hidden border border-indigo-200">
+                    <!-- Added subtle checkerboard background for transparent results -->
+                    <div class="absolute inset-0 bg-repeat bg-gray-200" style="background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px;"></div>
+                    <img id="resultImage" class="max-h-full max-w-full object-contain rounded-2xl absolute inset-0 m-auto" src="" alt="Modified Image" style="display: none;">
+                    <span id="resultPlaceholder" class="text-gray-400 text-lg relative z-10">Your updated LeGod will appear here</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // =====================================================================
+        // IMPORTANT: For GitHub Pages, replace the empty string below with
+        // your actual Gemini API Key to enable the image generation functionality.
+        // =====================================================================
+        const apiKey = "AIzaSyDG-7NFWHi5lc9594wI03e-LVmcbZVAMCo"; 
+
+        const TRAIT_DATA = {
+            'Hat': [
+                { id: 'hat-gold-crown', name: 'Gold Crown', prompt: 'a glorious gold king\'s crown' },
+                { id: 'hat-halo', name: 'Halo', prompt: 'a luminous golden halo floating above the head' },
+                { id: 'hat-viking-helmet', name: 'Viking Helmet', prompt: 'a detailed Viking helmet with horns' },
+                { id: 'hat-cyber-goggles', name: 'Cyber Goggles (Forehead)', prompt: 'a pair of futuristic blue LED cyber goggles on the forehead' },
+                { id: 'hat-fedora', name: 'Fedora', prompt: 'a classic grey fedora hat' },
+                { id: 'hat-none', name: 'No Headwear', prompt: 'remove the existing headwear, leaving only the hair if present' }
+            ],
+            'Torso': [
+                { id: 'torso-spiked-jacket', name: 'Spiked Jacket', prompt: 'a black leather jacket covered in sharp silver metal spikes' },
+                { id: 'torso-tuxedo', name: 'Tuxedo', prompt: 'a classic black and white tuxedo suit' },
+                { id: 'torso-royal-robe', name: 'Royal Robe', prompt: 'a deep velvet crimson royal robe' },
+                { id: 'torso-armor', name: 'Armor', prompt: 'a futuristic silver body armor suit' },
+                { id: 'torso-tshirt', name: 'Simple T-Shirt', prompt: 'a plain black t-shirt' },
+                { id: 'torso-tunic', name: 'Medieval Tunic', prompt: 'a simple, brown medieval tunic' }
+            ],
+            'Eyewear': [
+                { id: 'eyewear-monocle', name: 'Monocle', prompt: 'a sophisticated gold-rimmed monocle on one eye' },
+                { id: 'eyewear-aviator', name: 'Aviator Shades', prompt: 'large, mirrored aviator sunglasses' },
+                { id: 'eyewear-laser-visor', name: 'Laser Visor', prompt: 'a glowing red laser visor across the eyes' },
+                { id: 'eyewear-reading', name: 'Reading Glasses', prompt: 'small, scholarly reading glasses' },
+                { id: 'eyewear-none', name: 'No Eyewear', prompt: 'remove any existing eyewear' }
+            ],
+            'Skin Color': [
+                { id: 'color-pink', name: 'Pink/Magenta Skin', prompt: 'a vibrant pink or magenta color for the skin or primary body material' },
+                { id: 'color-gold', name: 'Gold Skin', prompt: 'a polished gold color for the skin and primary body material' },
+                { id: 'color-green', name: 'Emerald Green Skin', prompt: 'a bright emerald green color for the skin and primary body material' },
+                { id: 'color-blue', name: 'Deep Blue Skin', prompt: 'a deep ocean blue color for the skin or primary body material' },
+                { id: 'color-red', name: 'Glowing Red Skin', prompt: 'a bright, subtly glowing crimson red color for the skin and primary body material' }
+            ],
+            'Background': [
+                { id: 'bg-remove', name: 'Remove Background (Transparent)', prompt: 'remove the existing background completely and replace it with a pure white canvas, isolating the LeGods character' },
+                { id: 'bg-cyberpunk', name: 'Cyberpunk Cityscape', prompt: 'replace the entire background with a neon-lit, rainy cyberpunk cityscape' },
+                { id: 'bg-ancient-ruins', name: 'Ancient Temple Ruins', prompt: 'replace the entire background with sun-drenched ancient stone temple ruins' },
+                { id: 'bg-deep-space', name: 'Deep Space Galaxy', prompt: 'replace the entire background with a swirling, colorful nebula in deep space' },
+                { id: 'bg-gold-bar', name: 'Solid Gold Bar', prompt: 'replace the entire background with a solid, reflective block of polished gold' },
+                { id: 'bg-snowy', name: 'Snowy Forest', prompt: 'replace the entire background with a softly falling snow scene with pine trees and twinkling lights' }
+            ],
+            'Expression': [
+                { id: 'expr-fierce', name: 'Fierce', prompt: 'a fierce, angry facial expression showing sharp fangs' },
+                { id: 'expr-aesthetic', name: 'Aesthetic', prompt: 'a calm, closed-eye, aesthetic expression' },
+                { id: 'expr-serious', name: 'Serious', prompt: 'a very serious, stern, and focused expression' },
+                { id: 'expr-winking', name: 'Winking', prompt: 'a playful expression with one eye winking' },
+                { id: 'expr-confused', name: 'Confused', prompt: 'a confused, slightly furrowed-brow expression' },
+                { id: 'expr-none', name: 'Default Expression', prompt: 'revert to a neutral, default facial expression' }
+            ],
+            'Holiday': [
+                { id: 'xmas-santa-hat', name: 'Santa Hat', prompt: 'a classic red and white fluffy Santa hat on the head' },
+                { id: 'xmas-reindeer-antlers', name: 'Reindeer Antlers', prompt: 'large, realistic brown reindeer antlers emerging from the head' },
+                { id: 'xmas-candy-cane', name: 'Candy Cane Staff', prompt: 'a giant, red and white striped candy cane staff held firmly as a weapon' },
+                { id: 'xmas-sweater', name: 'Xmas Sweater', prompt: 'a festive, ugly Christmas sweater on the torso' }
+            ]
+        };
+
+        let activeCategory = null; 
+        let selectedTraits = new Map(); 
+
+        // --- UI Rendering Functions ---
+
+        function renderCategoryButtons() {
+            const container = document.getElementById('categoryButtons');
+            container.innerHTML = '';
+            
+            Object.keys(TRAIT_DATA).forEach(category => {
+                const button = document.createElement('button');
+                button.textContent = category;
+                button.className = 'category-button px-6 py-3 rounded-xl text-lg font-medium border border-gray-300 text-gray-700 bg-gray-50 hover:bg-indigo-50 hover:border-indigo-400';
+                button.setAttribute('data-category', category);
+                button.onclick = () => showCategoryTraits(category);
+                container.appendChild(button);
+            });
+        }
+
+        function showCategoryTraits(category) {
+            // Clear previous category selection highlight
+            document.querySelectorAll('#categoryButtons button').forEach(btn => {
+                btn.classList.remove('selected-category');
+            });
+            
+            // Highlight the new active category
+            const newSelectedBtn = document.querySelector(`[data-category="${category}"]`);
+            newSelectedBtn.classList.add('selected-category');
+
+            activeCategory = category;
+            const container = document.getElementById('traitButtons');
+            const label = document.getElementById('traitSelectionLabel');
+            const selectionContainer = document.getElementById('traitSelectionContainer');
+
+            container.innerHTML = '';
+            label.textContent = `3. Choose Traits for ${category}`;
+            selectionContainer.classList.remove('hidden');
+
+            TRAIT_DATA[category].forEach(trait => {
+                const button = document.createElement('button');
+                button.textContent = trait.name;
+                button.className = `trait-button px-5 py-2 rounded-xl text-base font-medium border border-gray-300 text-gray-700 bg-gray-50 hover:bg-emerald-50 hover:border-emerald-400 ${selectedTraits.has(trait.id) ? 'selected-trait' : ''}`;
+                button.setAttribute('data-trait-id', trait.id);
+                button.setAttribute('data-trait-category', category); // Store category for easy removal
+                button.onclick = () => toggleTrait(trait, category);
+                container.appendChild(button);
+            });
+        }
+
+        function toggleTrait(trait, category) {
+            const traitButton = document.querySelector(`[data-trait-id="${trait.id}"]`);
+
+            // SPECIAL LOGIC for 'Background' category: Only one background can be active at a time.
+            if (category === 'Background' && !selectedTraits.has(trait.id)) {
+                // Find and remove any previously selected background trait
+                const existingBg = Array.from(selectedTraits.values()).find(t => t.category === 'Background');
+                if (existingBg) {
+                    removeTraitById(existingBg.id);
+                }
+            }
+
+            if (selectedTraits.has(trait.id)) {
+                // Deselect trait
+                selectedTraits.delete(trait.id);
+                if (traitButton) {
+                    traitButton.classList.remove('selected-trait');
+                }
+            } else {
+                // Select trait
+                selectedTraits.set(trait.id, { ...trait, category: category });
+                if (traitButton) {
+                    traitButton.classList.add('selected-trait');
+                }
+            }
+            renderSelectedTraitsPills();
+            updateGenerateButtonState();
+        }
+
+        function renderSelectedTraitsPills() {
+            const container = document.getElementById('selectedTraitsPills');
+            container.innerHTML = ''; // Clear existing pills
+            document.getElementById('noTraitsSelected').classList.toggle('hidden', selectedTraits.size > 0);
+
+            selectedTraits.forEach((trait, id) => {
+                const pill = document.createElement('span');
+                pill.className = 'trait-pill';
+                pill.innerHTML = `${trait.name} (${trait.category}) <span class="trait-pill-remove" data-trait-id="${id}">&times;</span>`;
+                pill.querySelector('.trait-pill-remove').onclick = (e) => {
+                    e.stopPropagation(); // Prevent re-triggering button click
+                    removeTraitById(id);
+                };
+                container.appendChild(pill);
+            });
+        }
+
+        function removeTraitById(id) {
+            const trait = selectedTraits.get(id);
+            if (trait) {
+                selectedTraits.delete(id);
+                const traitButton = document.querySelector(`[data-trait-id="${id}"]`);
+                if (traitButton) {
+                    traitButton.classList.remove('selected-trait');
+                }
+                renderSelectedTraitsPills();
+                updateGenerateButtonState();
+            }
+        }
+
+        function updateGenerateButtonState() {
+            const generateButton = document.getElementById('generateButton');
+            const fileInput = document.getElementById('imageUpload');
+            
+            const isReady = fileInput.files.length > 0 && selectedTraits.size > 0;
+            generateButton.disabled = !isReady;
+            
+            if (isReady) {
+                generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('buttonText').textContent = `Generate ${selectedTraits.size} Trait(s)`;
+            } else {
+                generateButton.classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('buttonText').textContent = 'Select Image and at least one Trait';
+            }
+        }
+
+        // Initial rendering of category buttons
+        window.onload = () => {
+            renderCategoryButtons();
+            renderSelectedTraitsPills(); // Initialize pills display
+            updateGenerateButtonState(); // Initialize button state
+        };
+
+        document.getElementById('imageUpload').addEventListener('change', updateGenerateButtonState);
+
+
+        // --- AI Generation Logic ---
+
+        // Helper function to convert a File object to a Base64 string
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64String = reader.result.split(',')[1];
+                    resolve(base64String);
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function startGeneration() {
+            const fileInput = document.getElementById('imageUpload');
+            const statusDiv = document.getElementById('statusMessage');
+            const generateButton = document.getElementById('generateButton');
+            const buttonText = document.getElementById('buttonText');
+            const spinner = document.getElementById('spinner');
+
+            // IMPORTANT: Check for API Key if running outside Canvas
+            if (apiKey === "") {
+                statusDiv.textContent = 'ERROR: Please insert your Gemini API Key in the <script> section (const apiKey = "YOUR_KEY";) to use this application on GitHub Pages.';
+                return;
+            }
+
+            const file = fileInput.files[0];
+
+            if (!file || selectedTraits.size === 0) {
+                statusDiv.textContent = 'Please upload a LeGods image and select at least one trait.';
+                return;
+            }
+
+            // Construct the final, detailed prompt for the AI based on all selected traits
+            let traitPrompts = Array.from(selectedTraits.values()).map(t => `'${t.prompt}'`);
+            
+            // Check for background removal separately as it's a critical instruction
+            const hasBackgroundRemoval = Array.from(selectedTraits.values()).some(t => t.id === 'bg-remove');
+            
+            let finalPrompt = `Modify the LeGods character in the provided NFT image by incorporating the following changes: ${traitPrompts.join(', ')}. Maintain the original NFT art style and character pose. If a background change is requested, apply it. Focus only on the requested trait changes.`;
+            
+            if (hasBackgroundRemoval) {
+                finalPrompt = `Based on the attached LeGods NFT image, execute the following instructions: ${traitPrompts.join(', ')}. **Specifically, isolate the LeGods character and remove the background.** Ensure the original NFT art style and character pose are maintained.`;
+            }
+
+
+            // --- UI: Set Loading State ---
+            generateButton.disabled = true;
+            generateButton.classList.add('opacity-50', 'cursor-not-allowed');
+            buttonText.textContent = 'Generating...';
+            spinner.classList.remove('hidden');
+            statusDiv.textContent = 'Sending LeGods image and modification requests to Le-Wardrobe AI...';
+
+            // Reset result image
+            document.getElementById('resultImage').style.display = 'none';
+            document.getElementById('resultPlaceholder').classList.remove('hidden');
+
+            try {
+                const base64ImageData = await fileToBase64(file);
+                const mimeType = file.type;
+
+                // Display the original image immediately
+                const originalImage = document.getElementById('originalImage');
+                originalImage.src = `data:${mimeType};base64,${base64ImageData}`;
+                originalImage.style.display = 'block';
+                document.getElementById('originalPlaceholder').classList.add('hidden');
+
+
+                const payload = {
+                    contents: [{
+                        parts: [
+                            // System instruction to the model to edit the image based on the prompt
+                            { text: finalPrompt },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: base64ImageData
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseModalities: ['IMAGE']
+                    },
+                };
+
+                // Use the API Key provided by the user (or environment)
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+
+                let response;
+                // Exponential backoff retry loop (max 5 attempts)
+                for (let attempt = 0; attempt < 5; attempt++) {
+                    try {
+                        response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (response.ok) {
+                            break; // Success
+                        }
+
+                        // If it's a transient error (e.g., 500, 429), retry
+                        if (response.status >= 500 || response.status === 429) {
+                            const delay = Math.pow(2, attempt) * 1000;
+                            statusDiv.textContent = `Server error (${response.status}). Retrying in ${delay / 1000}s...`;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue; // Retry
+                        }
+
+                        // For other errors (e.g., 400), stop retrying
+                        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+
+                    } catch (error) {
+                        if (attempt === 4) throw error; // Re-throw on last attempt
+                        const delay = Math.pow(2, attempt) * 1000;
+                        statusDiv.textContent = `Connection error. Retrying in ${delay / 1000}s...`;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+
+                if (!response || !response.ok) {
+                    throw new Error(`Failed to fetch image after multiple retries.`);
+                }
+
+                const result = await response.json();
+                const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                if (!base64Data) {
+                    statusDiv.textContent = 'Image generation failed. The model might not have understood the request or the image was too complex with too many trait changes.';
+                    return;
+                }
+
+                const imageUrl = `data:image/png;base64,${base64Data}`;
+                
+                // Display the result image
+                const resultImage = document.getElementById('resultImage');
+                resultImage.src = imageUrl;
+                resultImage.style.display = 'block';
+                document.getElementById('resultPlaceholder').classList.add('hidden');
+                
+                statusDiv.textContent = `Le-Wardrobe successful! ${selectedTraits.size} trait(s) applied.`;
+
+            } catch (error) {
+                console.error('Generation Error:', error);
+                statusDiv.textContent = `An error occurred: ${error.message}. Please try again.`;
+            } finally {
+                // --- UI: Stop Loading State ---
+                updateGenerateButtonState();
+                buttonText.textContent = 'Generate Trait Change';
+                spinner.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
+
