@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF16">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cartoon Christmas Editor</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary-color: #EF4444; /* Red 500 */
+            --secondary-color: #10B981; /* Emerald 500 */
+            --bg-color: #F9FAFB; /* Gray 50 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+        }
+        .trait-button {
+            transition: all 0.2s;
+            white-space: nowrap; /* Prevent button labels from wrapping */
+        }
+        .trait-button:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
+        }
+        .trait-button.selected {
+            background-color: var(--secondary-color);
+            color: white;
+            border-color: var(--secondary-color);
+        }
+        .image-placeholder {
+            min-height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #E5E7EB; /* Gray 200 */
+            border: 2px dashed #9CA3AF; /* Gray 400 */
+        }
+        /* Custom style for the generate button to make it highly visible */
+        #generateBtn {
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3), 0 4px 6px -4px rgba(239, 68, 68, 0.3);
+            border: 3px solid transparent;
+        }
+        #generateBtn:not([disabled]) {
+            animation: pulse-ring 2s infinite;
+        }
+        @keyframes pulse-ring {
+            0%, 100% {
+                border-color: rgba(239, 68, 68, 0.2);
+            }
+            50% {
+                border-color: rgba(239, 68, 68, 0.5);
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 text-center mb-8">
+            <span class="text-red-600">AI</span> Christmas Cartoon Editor
+        </h1>
+        <p class="text-center text-gray-600 mb-8">Upload a cartoon portrait and give your character a festive, winter makeover!</p>
+
+        <!-- Main Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            <!-- 1. Controls/Upload Column (Sidebar on Desktop) -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg flex flex-col h-full lg:max-h-[85vh]">
+                <h2 class="text-2xl font-bold mb-4 flex items-center text-gray-800 shrink-0">
+                    <i data-lucide="gift" class="w-5 h-5 mr-2 text-primary-color"></i>
+                    Festive Traits
+                </h2>
+
+                <!-- Upload Section (fixed height) -->
+                <div class="mb-6 border-b pb-4 shrink-0">
+                    <label for="imageUpload" class="block text-lg font-medium text-gray-700 mb-2">1. Upload Cartoon Image</label>
+                    <input type="file" id="imageUpload" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-600 hover:file:bg-red-100 cursor-pointer">
+                </div>
+
+                <!-- Trait Buttons Container (scrollable area, takes up remaining space) -->
+                <div id="traitScrollContainer" class="flex-grow overflow-y-auto pr-2 mb-6">
+                    <div id="traitControls">
+                        <!-- Buttons will be dynamically generated here -->
+                    </div>
+                </div>
+
+                <!-- GENERATE BUTTON (fixed at bottom) -->
+                <button id="generateBtn" disabled class="w-full py-3 mt-auto text-white font-semibold rounded-lg transition duration-200 bg-gray-300 flex items-center justify-center shrink-0">
+                    <i data-lucide="wand" class="w-5 h-5 mr-2"></i>
+                    Generate Festive Update
+                </button>
+            </div>
+
+            <!-- 2. Image Display Column -->
+            <div class="lg:col-span-2 space-y-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    <!-- Original Image -->
+                    <div class="bg-white p-4 rounded-xl shadow-lg">
+                        <h2 class="text-xl font-bold mb-3 text-center text-gray-800 flex items-center justify-center">
+                            <i data-lucide="image" class="w-5 h-5 mr-2 text-gray-500"></i>
+                            Original Image
+                        </h2>
+                        <div id="originalImageContainer" class="image-placeholder rounded-lg">
+                            <span class="text-gray-500 text-center p-4">Upload an image to start.</span>
+                        </div>
+                    </div>
+
+                    <!-- Generated Image -->
+                    <div class="bg-white p-4 rounded-xl shadow-lg">
+                        <h2 class="text-xl font-bold mb-3 text-center text-gray-800 flex items-center justify-center">
+                            <i data-lucide="sparkles" class="w-5 h-5 mr-2 text-secondary-color"></i>
+                            Generated Update
+                        </h2>
+                        <div id="generatedImageContainer" class="image-placeholder rounded-lg">
+                            <div id="loadingIndicator" class="hidden text-center">
+                                <svg class="animate-spin h-8 w-8 text-primary-color mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <p class="mt-2 text-primary-color font-medium">Generating your festive look...</p>
+                                <p class="text-sm text-gray-500">This may take up to 30 seconds.</p>
+                            </div>
+                            <span id="noResultText" class="text-gray-500 text-center p-4">Result will appear here.</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Download Button and Error Message -->
+                <div class="text-center pt-4">
+                    <button id="downloadBtn" disabled class="px-8 py-3 bg-gray-300 text-white font-semibold rounded-lg shadow-md transition duration-200 flex items-center mx-auto">
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i>
+                        Download Generated Image
+                    </button>
+                    <!-- Improved Error Display -->
+                    <p id="errorMsg" class="mt-4 text-red-600 font-medium p-3 bg-red-100 border border-red-300 rounded-lg hidden"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs and Application Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Use Debug logging for Firebase to help with diagnostics
+        setLogLevel('Debug');
+
+        // --- GLOBAL SETUP (Required for Canvas Environment) ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let auth, db, userId = null;
+        let originalImageBase64 = null;
+        let selectedTraits = {}; // Holds {Category: TraitKey}
+        
+        // Model used for image editing
+        const API_MODEL = "gemini-2.5-flash-image-preview";
+        // CRITICAL: Set the API Key to an empty string for Canvas environment injection.
+        const API_KEY = ""; 
+
+        // --- CHRISTMAS THEMED TRAIT CONFIGURATION ---
+        const TRAIT_CONFIG = {
+            // Background
+            'bg-xmas': { category: 'Background', icon: 'TreePine', label: 'Cozy Fireplace', prompt: "Change the background to a softly lit, cozy Christmas fireplace scene with stockings and a tree. Maintain the cartoon style." },
+            'bg-snow': { category: 'Background', icon: 'Snowflake', label: 'Snowy Forest Night', prompt: "Change the background to a beautiful, dark snowy forest night with gentle snowfall. Maintain the cartoon style." },
+            'bg-lights': { category: 'Background', icon: 'Lightbulb', label: 'Blurry Bokeh Lights', prompt: "Change the background to a blurred, colorful bokeh effect resembling out-of-focus Christmas tree lights. Maintain the cartoon style." },
+            
+            // Hat 
+            'hat-santa': { category: 'Hat', icon: 'Gift', label: 'Classic Santa Hat', prompt: "Remove any existing hat and add a classic red and white Santa Hat, placed slightly tilted. Maintain the cartoon style." },
+            'hat-antlers': { category: 'Hat', icon: 'Deer', label: 'Reindeer Antlers Headband', prompt: "Remove any existing hat and add a novelty reindeer antlers headband. Maintain the cartoon style." },
+            
+            // Shirt/Torso
+            'shirt-sweater': { category: 'Shirt', icon: 'Shirt', label: 'Ugly Christmas Sweater', prompt: "Remove the existing torso clothing and replace it with a hilariously ugly Christmas sweater featuring reindeer and snowmen. Maintain the cartoon style." },
+            'shirt-elf': { category: 'Shirt', icon: 'Sparkles', label: 'Elf Tunic & Collar', prompt: "Remove the existing torso clothing and replace it with a green and red elf tunic and white ruffled collar. Maintain the cartoon style." },
+            
+            // Mouth
+            'mouth-cookie': { category: 'Mouth', icon: 'Cookie', label: 'Chewing Gingerbread', prompt: "Change the mouth expression to chewing happily on a half-eaten gingerbread cookie. Maintain the cartoon style." },
+            'mouth-hoho': { category: 'Mouth', icon: 'Megaphone', label: 'Yelling "Ho Ho Ho"', prompt: "Change the mouth expression to a wide, open, booming mouth, as if yelling 'Ho Ho Ho!'. Maintain the cartoon style." },
+
+            // Glasses
+            'glasses-round': { category: 'Glasses', icon: 'Glasses', label: 'Festive Red-Rimmed', prompt: "Add round, thick, festive bright red-rimmed glasses. Maintain the cartoon style." },
+            'glasses-candy': { category: 'Glasses', icon: 'CandyCane', label: 'Candy Cane Stripes', prompt: "Add glasses with frames that are painted with red and white candy cane stripes. Maintain the cartoon style." },
+
+            // Hair
+            'hair-tinsel': { category: 'Hair', icon: 'Sparkles', label: 'Hair Wrapped in Tinsel', prompt: "Remove the existing hair and add long, dark hair decorated with sparkly silver tinsel strands and small ornaments. Maintain the cartoon style." },
+            'hair-braid': { category: 'Hair', icon: 'Ribbon', label: 'Braid with Christmas Bows', prompt: "Remove the existing hair and give the character a neat braid decorated with small red and green Christmas bows. Maintain the cartoon style." }
+        };
+
+
+        // --- DOM Elements ---
+        const imageUpload = document.getElementById('imageUpload');
+        const originalImageContainer = document.getElementById('originalImageContainer');
+        const generatedImageContainer = document.getElementById('generatedImageContainer');
+        const traitControls = document.getElementById('traitControls');
+        const generateBtn = document.getElementById('generateBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const noResultText = document.getElementById('noResultText');
+        const errorMsg = document.getElementById('errorMsg');
+        
+        // --- Utility Functions ---
+
+        /**
+         * Converts a File object to a Base64 data URL string.
+         * @param {File} file 
+         * @returns {Promise<string>}
+         */
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                // Only resolve the base64 data part (after the comma)
+                reader.onload = () => resolve(reader.result.split(',')[1]); 
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        /**
+         * Creates an image element and displays it in the container.
+         * @param {string} base64Data - The Base64 image data (without mime type prefix).
+         * @param {HTMLElement} container - The container element to place the image in.
+         */
+        function displayImage(base64Data, container) {
+            container.innerHTML = '';
+            container.classList.remove('image-placeholder');
+            const img = document.createElement('img');
+            img.src = `data:image/png;base64,${base64Data}`;
+            img.className = "w-full h-auto object-contain rounded-lg shadow-inner";
+            container.appendChild(img);
+        }
+        
+        /**
+         * Retries a function using exponential backoff.
+         * @param {Function} fn - The function to execute.
+         * @param {number} maxRetries - Maximum number of retries.
+         * @param {number} delay - Initial delay in ms.
+         * @returns {Promise<any>}
+         */
+        async function withExponentialBackoff(fn, maxRetries = 5, delay = 1000) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    return await fn();
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    const waitTime = delay * Math.pow(2, i) + Math.random() * 1000;
+                    console.warn(`Request failed, retrying attempt ${i + 2}/${maxRetries} in ${Math.round(waitTime / 1000)}s...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+            }
+        }
+
+
+        // --- Firebase/Auth Initialization ---
+
+        async function initializeFirebaseAndAuth() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("Firebase Auth Ready. User ID:", userId);
+                    } else {
+                        userId = crypto.randomUUID();
+                        console.log("Signed in anonymously. Temporary ID:", userId);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase/Auth initialization failed:", error);
+            }
+        }
+        
+        // --- Trait Controls Logic ---
+        
+        /**
+         * Dynamically generates the trait selection buttons based on TRAIT_CONFIG.
+         */
+        function renderTraitControls() {
+            const categories = {};
+            // Group traits by category
+            Object.keys(TRAIT_CONFIG).forEach(key => {
+                const config = TRAIT_CONFIG[key];
+                if (!categories[config.category]) {
+                    categories[config.category] = [];
+                }
+                categories[config.category].push({ key, ...config });
+            });
+
+            // Render groups
+            traitControls.innerHTML = '';
+            Object.keys(categories).forEach(category => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'mb-6';
+                categoryDiv.innerHTML = `<h3 class="text-lg font-semibold text-gray-700 mb-2">${category} (Select one)</h3>`;
+                
+                const buttonsDiv = document.createElement('div');
+                buttonsDiv.className = 'flex flex-wrap gap-2';
+
+                categories[category].forEach(trait => {
+                    const btn = document.createElement('button');
+                    btn.id = `trait-${trait.key}`;
+                    btn.setAttribute('data-trait', trait.key);
+                    btn.className = 'trait-button flex items-center px-3 py-1.5 text-sm font-medium rounded-full border border-gray-300 text-gray-700 bg-gray-50 hover:bg-gray-100';
+                    btn.innerHTML = `<i data-lucide="${trait.icon}" class="w-4 h-4 mr-1"></i> ${trait.label}`;
+                    
+                    btn.addEventListener('click', () => handleTraitSelection(trait.key));
+                    buttonsDiv.appendChild(btn);
+                });
+
+                categoryDiv.appendChild(buttonsDiv);
+                traitControls.appendChild(categoryDiv);
+            });
+            // Feather the lucide icons
+            lucide.createIcons();
+        }
+
+        /**
+         * Updates the state and styling of the generate button based on current selections.
+         */
+        function updateGenerateButtonState() {
+            const hasImage = !!originalImageBase64;
+            const hasTraits = Object.keys(selectedTraits).length > 0;
+            const isReady = hasImage && hasTraits;
+
+            generateBtn.disabled = !isReady;
+            
+            if (isReady) {
+                // Enabled state: Primary color (Red)
+                generateBtn.classList.remove('bg-gray-300');
+                generateBtn.classList.add('bg-primary-color', 'hover:bg-red-600');
+            } else {
+                // Disabled state: Visible grey color
+                generateBtn.classList.remove('bg-primary-color', 'hover:bg-red-600');
+                generateBtn.classList.add('bg-gray-300');
+            }
+        }
+
+        /**
+         * Handles the selection/deselection of a trait button, enforcing one selection per category.
+         * @param {string} traitKey 
+         */
+        function handleTraitSelection(traitKey) {
+            const config = TRAIT_CONFIG[traitKey];
+            const category = config.category;
+            const buttonElement = document.getElementById(`trait-${traitKey}`);
+
+            // Deselect previous trait in the same category, if any
+            const previouslySelectedKey = selectedTraits[category];
+            if (previouslySelectedKey && previouslySelectedKey !== traitKey) {
+                const prevButton = document.getElementById(`trait-${previouslySelectedKey}`);
+                if (prevButton) {
+                    prevButton.classList.remove('selected');
+                }
+            }
+
+            if (selectedTraits[category] === traitKey) {
+                // Toggle off
+                delete selectedTraits[category];
+                buttonElement.classList.remove('selected');
+            } else {
+                // Select new trait
+                selectedTraits[category] = traitKey;
+                buttonElement.classList.add('selected');
+            }
+            
+            updateGenerateButtonState();
+        }
+
+
+        // --- Image Generation Logic ---
+
+        async function generateImage() {
+            if (!originalImageBase64 || Object.keys(selectedTraits).length === 0) {
+                console.error("Missing image or selected trait.");
+                return;
+            }
+
+            // UI State: Loading
+            errorMsg.classList.add('hidden');
+            noResultText.classList.add('hidden');
+            loadingIndicator.classList.remove('hidden');
+            generateBtn.disabled = true;
+            downloadBtn.disabled = true;
+            // Set download button to disabled styling
+            downloadBtn.classList.remove('bg-secondary-color', 'hover:bg-emerald-600');
+            downloadBtn.classList.add('bg-gray-300');
+
+            generatedImageContainer.innerHTML = ''; // Clear previous result
+            
+            const traitKeys = Object.keys(selectedTraits).map(cat => selectedTraits[cat]);
+            
+            // 1. Construct the combined prompt from all selected traits
+            const basePrompt = "Using the provided cartoon character image, apply the following modifications, maintaining the existing character pose, style, and identity:";
+            const traitPrompts = traitKeys.map(key => TRAIT_CONFIG[key].prompt).join(" AND ALSO ");
+            const userPrompt = `${basePrompt} ${traitPrompts}`;
+
+            // 2. Stricter system prompt enforcing safety and style
+            const systemPrompt = `You are an expert cartoon editor. Your task is to modify the provided image based on the user's request. CRITICAL SAFETY AND STYLE RULES: The final output MUST be a high-quality, non-photorealistic cartoon or illustrated style image. You MUST NOT generate images of real people, explicit, or sexually suggestive content. If the input image is of a real person, or if the resulting image would violate safety policies (e.g., explicit or inappropriate), return an empty response or a policy violation message instead of generating the image. Strictly adhere to these rules.`;
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: userPrompt },
+                            {
+                                inlineData: {
+                                    mimeType: "image/png",
+                                    data: originalImageBase64
+                                }
+                            }
+                        ]
+                    }
+                ],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+
+            try {
+                const generatedData = await withExponentialBackoff(async () => {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${API_KEY}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        // Log the full error response for debugging
+                        console.error("Full API Error Response:", errorBody);
+                        // If the API returns an error status (e.g., 400, 500)
+                        throw new Error(`API Error: ${response.status} - ${errorBody.error?.message || response.statusText}. Check the console for full details.`);
+                    }
+
+                    const result = await response.json();
+                    
+                    const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                    if (!base64Data) {
+                        // This block catches cases where the model successfully returns a response but no image (often due to safety filtering)
+                        throw new Error("Image generation failed. This can happen due to a content policy violation (if the input image is not a cartoon or is inappropriate), or if the model could not apply the traits successfully. Try a different input image.");
+                    }
+                    return base64Data;
+                });
+                
+                displayImage(generatedData, generatedImageContainer);
+                
+                // UI State: Success - Download logic fix confirmed
+                downloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    // CRITICAL: Ensure the data URI is correctly formed with the base64 prefix
+                    a.href = `data:image/png;base64,${generatedData}`; 
+                    a.download = `christmas-edit-${traitKeys.join('-')}-${Date.now()}.png`;
+                    // Trigger download in the iFrame environment
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                };
+                downloadBtn.disabled = false;
+                // Set download button to enabled styling
+                downloadBtn.classList.remove('bg-gray-300');
+                downloadBtn.classList.add('bg-secondary-color', 'hover:bg-emerald-600');
+
+            } catch (error) {
+                console.error("Generation failed:", error);
+                // UI State: Error
+                errorMsg.textContent = `Generation failed: ${error.message}`;
+                errorMsg.classList.remove('hidden');
+                noResultText.classList.remove('hidden');
+                // Ensure download button remains disabled (default styling is bg-gray-300)
+                downloadBtn.disabled = true;
+                downloadBtn.classList.remove('bg-secondary-color', 'hover:bg-emerald-600');
+                downloadBtn.classList.add('bg-gray-300');
+
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                updateGenerateButtonState(); // Re-enable generate if possible
+            }
+        }
+
+
+        // --- Event Listeners and Initial Setup ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebaseAndAuth();
+            renderTraitControls();
+        });
+
+        imageUpload.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                try {
+                    // Reset UI on new upload
+                    errorMsg.classList.add('hidden');
+                    generatedImageContainer.innerHTML = '<span id="noResultText" class="text-gray-500 text-center p-4">Result will appear here.</span>';
+                    
+                    if (!file.type.startsWith('image/')) {
+                         throw new Error("Please upload a valid image file.");
+                    }
+                    
+                    const base64 = await fileToBase64(file);
+                    originalImageBase64 = base64;
+                    displayImage(base64, originalImageContainer);
+                    
+                    // Reset download button visibility on new upload
+                    downloadBtn.disabled = true;
+                    downloadBtn.classList.remove('bg-secondary-color', 'hover:bg-emerald-600');
+                    downloadBtn.classList.add('bg-gray-300');
+
+                    updateGenerateButtonState();
+
+                } catch (error) {
+                    console.error("Image upload error:", error);
+                    errorMsg.textContent = `File Error: ${error.message}`;
+                    errorMsg.classList.remove('hidden');
+                }
+            }
+        });
+        
+        generateBtn.addEventListener('click', generateImage);
+
+    </script>
+</body>
+</html>
+
